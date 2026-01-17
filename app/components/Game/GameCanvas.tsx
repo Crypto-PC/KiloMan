@@ -6,9 +6,11 @@ interface GameCanvasProps {
   gameState: GameStatus;
   setGameState: (status: GameStatus) => void;
   jumpModifier: number;
+  lives: number;
+  setLives: (l: number) => void;
 }
 
-const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpModifier }) => {
+const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpModifier, lives, setLives }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const requestRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
@@ -56,6 +58,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
   const monstersRef = useRef<MonsterState[]>([]);
   const keysRef = useRef<{ [key: string]: boolean }>({});
   const logoRef = useRef<HTMLImageElement | null>(null);
+  const isInvincibleRef = useRef<boolean>(false);
+  const invincibleTimerRef = useRef<number>(0);
 
   // Load Logo
   useEffect(() => {
@@ -104,7 +108,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
         frame: 0,
       };
       cameraRef.current = { x: 0, y: 0 };
-      
+      isInvincibleRef.current = false;
+      invincibleTimerRef.current = 0;
+
       // Initialize Monsters
       monstersRef.current = LEVEL_1
         .filter(e => e.type === 'monster')
@@ -213,13 +219,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
     ctx.strokeRect(x, y, entity.w, entity.h);
   };
 
-  const drawHumanoid = (ctx: CanvasRenderingContext2D, p: PlayerState, cameraX: number, cameraY: number) => {
+  const drawCat = (ctx: CanvasRenderingContext2D, p: PlayerState, cameraX: number, cameraY: number) => {
     const x = p.x - cameraX;
     const y = p.y - cameraY;
     const cx = x + p.width / 2;
 
     ctx.save();
-    
+
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
     ctx.beginPath();
@@ -227,7 +233,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
     ctx.fill();
 
     // Body Color
-    ctx.fillStyle = '#eab308'; // Yellow 500
+    ctx.fillStyle = '#f97316'; // Orange 500
 
     // Animation Offset
     const bob = Math.sin(frameCountRef.current * 0.2) * (Math.abs(p.vx) > 0.1 ? 3 : 1);
@@ -237,19 +243,42 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
     ctx.fillRect(cx - 8 + legOffset, y + 30, 6, 20); // Left Leg
     ctx.fillRect(cx + 2 - legOffset, y + 30, 6, 20); // Right Leg
 
-    // Torso
-    ctx.fillRect(cx - 10, y + 15 + bob, 20, 20);
+    // Torso (Cat body)
+    ctx.beginPath();
+    ctx.ellipse(cx, y + 25 + bob, 12, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
 
     // Head
-    ctx.fillStyle = '#fef08a'; // Yellow 200
+    ctx.fillStyle = '#fed7aa'; // Orange 200
     ctx.beginPath();
     ctx.arc(cx, y + 10 + bob, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Ears
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath();
+    ctx.moveTo(cx - 8, y + 5 + bob);
+    ctx.lineTo(cx - 12, y - 5 + bob);
+    ctx.lineTo(cx - 4, y - 5 + bob);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(cx + 8, y + 5 + bob);
+    ctx.lineTo(cx + 12, y - 5 + bob);
+    ctx.lineTo(cx + 4, y - 5 + bob);
     ctx.fill();
 
     // Eyes (Directional)
     ctx.fillStyle = '#000';
     const eyeDir = p.facing === 1 ? 4 : -4;
     ctx.fillRect(cx + eyeDir - 2, y + 8 + bob, 4, 4);
+
+    // Tail
+    ctx.strokeStyle = '#f97316';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(cx - 10, y + 35 + bob);
+    ctx.quadraticCurveTo(cx - 20, y + 20 + bob, cx - 15, y + 10 + bob);
+    ctx.stroke();
 
     ctx.restore();
   };
@@ -281,6 +310,39 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
     ctx.fillRect(cx + 3, cy - 5, 5, 5);
   };
 
+  // --- DEATH HANDLING ---
+
+  const handleDeath = () => {
+    if (lives > 1) {
+      setLives(lives - 1);
+      // Respawn
+      const startPos = LEVEL_1.find(e => e.type === 'start');
+      playerRef.current.x = startPos ? startPos.x : 50;
+      playerRef.current.y = startPos ? startPos.y : 350;
+      playerRef.current.vx = 0;
+      playerRef.current.vy = 0;
+      // Reset monsters
+      monstersRef.current = LEVEL_1
+        .filter(e => e.type === 'monster')
+        .map(m => ({
+          id: m.id,
+          x: m.x,
+          y: m.y,
+          w: m.w,
+          h: m.h,
+          vx: m.speed || 2,
+          patrolStart: m.patrolStart || m.x - 100,
+          patrolEnd: m.patrolEnd || m.x + 100,
+          speed: m.speed || 2,
+        }));
+      // Start invincibility
+      isInvincibleRef.current = true;
+      invincibleTimerRef.current = 180; // 3 seconds at 60fps
+    } else {
+      setGameState('lost');
+    }
+  };
+
   // --- GAME LOOP ---
 
   const update = () => {
@@ -291,6 +353,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
     const monsters = monstersRef.current;
 
     frameCountRef.current++;
+
+    // Update invincibility
+    if (invincibleTimerRef.current > 0) {
+      invincibleTimerRef.current--;
+      if (invincibleTimerRef.current === 0) {
+        isInvincibleRef.current = false;
+      }
+    }
 
     // --- PLAYER PHYSICS ---
     
@@ -343,7 +413,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
     if (player.x < 0) { player.x = 0; player.vx = 0; }
     if (player.x > CONFIG.levelWidth) { player.x = CONFIG.levelWidth; player.vx = 0; }
     if (player.y > 800) {
-      setGameState('lost');
+      handleDeath();
       return;
     }
 
@@ -359,8 +429,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
         player.y + player.height > entity.y
       ) {
         if (entity.type === 'hazard') {
-          setGameState('lost');
-          return;
+          if (!isInvincibleRef.current) {
+            handleDeath();
+            return;
+          }
         }
         
         if (entity.type === 'goal') {
@@ -398,8 +470,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
         player.y < m.y + m.h &&
         player.y + player.height > m.y
       ) {
-        setGameState('lost');
-        return;
+        if (!isInvincibleRef.current) {
+          handleDeath();
+          return;
+        }
       }
     }
 
@@ -495,7 +569,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({ gameState, setGameState, jumpMo
     });
 
     // Draw Player
-    drawHumanoid(ctx, playerRef.current, cameraX, cameraY);
+    if (!(isInvincibleRef.current && Math.floor(frameCountRef.current / 5) % 2 === 0)) {
+      drawCat(ctx, playerRef.current, cameraX, cameraY);
+    }
   };
 
   const loop = () => {

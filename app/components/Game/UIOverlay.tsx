@@ -7,6 +7,7 @@ interface UIOverlayProps {
   setJumpModifier: (val: number) => void;
   onRestart: () => void;
   completionData: CompletionData | null;
+  lives: number;
 }
 
 const UIOverlay: React.FC<UIOverlayProps> = ({
@@ -15,14 +16,16 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
   setJumpModifier,
   onRestart,
   completionData,
+  lives,
 }) => {
   return (
     <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-6">
       {/* Top Bar: Controls */}
       <div className="flex justify-between items-start pointer-events-auto">
         <div className="bg-black/80 border border-yellow-500 p-4 rounded text-yellow-500 font-mono">
-          <h1 className="text-xl font-bold mb-2">KILO MAN</h1>
+          <h1 className="text-xl font-bold mb-2">KILO CAT</h1>
           <div className="flex flex-col gap-2">
+            <p>Lives: {lives}</p>
             <label htmlFor="jump-slider" className="text-sm">
               Jump Power: {(jumpModifier * 100).toFixed(0)}%
             </label>
@@ -86,7 +89,7 @@ const UIOverlay: React.FC<UIOverlayProps> = ({
       {gameState === 'start' && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/90 pointer-events-auto">
           <div className="text-center">
-            <h1 className="text-6xl font-bold text-yellow-500 mb-4 tracking-tighter">KILO MAN</h1>
+            <h1 className="text-6xl font-bold text-yellow-500 mb-4 tracking-tighter">KILO CAT</h1>
             <p className="text-white font-mono mb-8">Use Arrow Keys to Move • Space to Jump</p>
             <button
               onClick={onRestart}

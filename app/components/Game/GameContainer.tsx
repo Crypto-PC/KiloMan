@@ -9,6 +9,7 @@ const GameContainer: React.FC = () => {
   const [gameState, setGameState] = useState<GameStatus>('start');
   const [jumpModifier, setJumpModifier] = useState<number>(1.0);
   const [completionData, setCompletionData] = useState<CompletionData | null>(null);
+  const [lives, setLives] = useState<number>(9);
   const startTimeRef = useRef<number>(0);
 
   // Calculate points based on completion time
@@ -26,6 +27,7 @@ const GameContainer: React.FC = () => {
     if (gameState === 'playing') {
       startTimeRef.current = Date.now();
       setCompletionData(null);
+      setLives(9);
     }
   }, [gameState]);
 
@@ -51,6 +53,8 @@ const GameContainer: React.FC = () => {
         gameState={gameState}
         setGameState={setGameState}
         jumpModifier={jumpModifier}
+        lives={lives}
+        setLives={setLives}
       />
       <UIOverlay
         gameState={gameState}
@@ -58,6 +62,7 @@ const GameContainer: React.FC = () => {
         setJumpModifier={setJumpModifier}
         onRestart={handleRestart}
         completionData={completionData}
+        lives={lives}
       />
     </div>
   );
